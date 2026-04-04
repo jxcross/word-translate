@@ -489,6 +489,11 @@
     bgInput.title = '번역 배경 색상';
     bgInput.addEventListener('input', (e) => {
       rtBg = e.target.value;
+      if (rtBgOpacity === 0) {
+        rtBgOpacity = 100;
+        opacitySlider.value = 100;
+        opacitySlider.title = '배경 투명도 (100%)';
+      }
       applyRtBg();
     });
 
