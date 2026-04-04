@@ -304,6 +304,11 @@
       --kr-gloss-rt-bg: ${rtBg};
     }
     ruby { ruby-align: center; }
+    .kr-gloss-block { line-height: 2.2 !important; }
+    h1.kr-gloss-block, h2.kr-gloss-block, h3.kr-gloss-block,
+    h4.kr-gloss-block, h5.kr-gloss-block, h6.kr-gloss-block {
+      line-height: 1.4 !important;
+    }
     rt {
       font-size: var(--kr-gloss-rt-size);
       color: var(--kr-gloss-rt-color);
@@ -488,14 +493,26 @@
   }
 
   function reprocessPage() {
-    // Remove all existing gloss wrappers
+    // Remove block-level line-height classes
+    document.querySelectorAll('.kr-gloss-block').forEach(function (el) {
+      el.classList.remove('kr-gloss-block');
+    });
+    // Remove all existing gloss wrappers, restoring original English text only
     const existing = document.querySelectorAll('[' + CONFIG.PROCESSED_ATTR + ']');
     for (const el of existing) {
-      const text = el.textContent;
-      const textNode = document.createTextNode(text);
-      el.parentNode.replaceChild(textNode, el);
+      let original = '';
+      for (const child of el.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          original += child.textContent;
+        } else if (child.tagName === 'RUBY') {
+          for (const rc of child.childNodes) {
+            if (rc.nodeType === Node.TEXT_NODE) original += rc.textContent;
+          }
+        }
+      }
+      el.parentNode.replaceChild(document.createTextNode(original), el);
     }
-    // Re-apply with new level
+    // Re-apply with new settings
     applyTranslations();
   }
 
@@ -765,6 +782,12 @@
     for (const tn of textNodes) {
       replaceTextNode(tn);
     }
+
+    // Mark parent block elements for line-height adjustment
+    root.querySelectorAll('[' + CONFIG.PROCESSED_ATTR + ']').forEach(function (el) {
+      const block = el.closest('p, li, td, th, dd, dt, blockquote, article, section, figcaption, h1, h2, h3, h4, h5, h6');
+      if (block) block.classList.add('kr-gloss-block');
+    });
   }
 
   // ── MutationObserver ──
