@@ -288,11 +288,17 @@
   function applyRtSize() {
     document.documentElement.style.setProperty('--kr-gloss-rt-size', rtSize + 'px');
     localStorage.setItem(CONFIG.RT_SIZE_KEY, rtSize);
+    document.querySelectorAll('span[' + CONFIG.PROCESSED_ATTR + '] rt').forEach(function (el) {
+      el.style.setProperty('font-size', rtSize + 'px', 'important');
+    });
   }
 
   function applyRtColor() {
     document.documentElement.style.setProperty('--kr-gloss-rt-color', rtColor);
     localStorage.setItem(CONFIG.RT_COLOR_KEY, rtColor);
+    document.querySelectorAll('span[' + CONFIG.PROCESSED_ATTR + '] rt').forEach(function (el) {
+      el.style.setProperty('color', rtColor, 'important');
+    });
   }
 
   function hexToRgba(hex, opacity) {
@@ -307,6 +313,9 @@
     document.documentElement.style.setProperty('--kr-gloss-rt-bg', val);
     localStorage.setItem(CONFIG.RT_BG_KEY, rtBg);
     localStorage.setItem(CONFIG.RT_BG_OPACITY_KEY, rtBgOpacity);
+    document.querySelectorAll('span[' + CONFIG.PROCESSED_ATTR + '] rt').forEach(function (el) {
+      el.style.setProperty('background', val, 'important');
+    });
   }
 
   GM_addStyle(`
@@ -812,6 +821,10 @@
           ruby.appendChild(document.createTextNode(seg));
           const rt = document.createElement('rt');
           rt.textContent = ko;
+          rt.style.setProperty('font-size', rtSize + 'px', 'important');
+          rt.style.setProperty('color', rtColor, 'important');
+          const bgVal = (rtBg === 'transparent' || !rtBg) ? 'transparent' : hexToRgba(rtBg, rtBgOpacity);
+          rt.style.setProperty('background', bgVal, 'important');
           ruby.appendChild(rt);
           fragment.appendChild(ruby);
         } else {
