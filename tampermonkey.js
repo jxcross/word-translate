@@ -17,8 +17,8 @@
   'use strict';
 
   const CONFIG = {
-    BATCH_SIZE: 50,
-    CACHE_KEY: 'tm_gloss_cache_v2',
+    BATCH_SIZE: 10,
+    CACHE_KEY: 'tm_gloss_cache_v3',
     CACHE_MAX_ENTRIES: 20000,
     MAX_WORD_LENGTH: 25,
     MIN_WORD_LENGTH: 2,
@@ -548,12 +548,16 @@
     saveCacheTimer = setTimeout(saveCache, 2000);
   }
 
+  // ── Word Filters ──
+
+  function isAcronymOrProper(word) {
+    return /^[A-Z]{2,}s?$/.test(word) || /^[A-Z][a-z]+$/.test(word);
+  }
+
   // ── Translation APIs ──
 
-  function translateGoogle(words) {
-    const text = words.join('\n');
+  function googleRequest(text) {
     const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=' + encodeURIComponent(text);
-
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
         method: 'GET',
@@ -562,15 +566,8 @@
         onload(res) {
           try {
             const json = JSON.parse(res.responseText);
-            const fullTranslation = json[0].map(seg => seg[0]).join('');
-            const translations = fullTranslation.split('\n');
-            const result = new Map();
-            words.forEach((w, i) => {
-              if (translations[i] && translations[i].trim()) {
-                result.set(w, translations[i].trim());
-              }
-            });
-            resolve(result);
+            const full = json[0].map(seg => seg[0]).join('');
+            resolve(full);
           } catch (e) {
             reject(new Error('Google parse error: ' + e.message));
           }
@@ -579,6 +576,34 @@
         ontimeout() { reject(new Error('Google timeout')); },
       });
     });
+  }
+
+  async function translateGoogle(words) {
+    // Try batch first
+    const batchText = words.join('\n');
+    const full = await googleRequest(batchText);
+    const lines = full.split('\n');
+
+    // If line count matches, use batch result
+    if (lines.length === words.length) {
+      const result = new Map();
+      words.forEach((w, i) => {
+        const t = lines[i] && lines[i].trim();
+        if (t) result.set(w, t);
+      });
+      return result;
+    }
+
+    // Fallback: translate individually
+    console.warn('[KR-Gloss] Batch mismatch (' + lines.length + ' vs ' + words.length + '), falling back to individual');
+    const result = new Map();
+    for (const w of words) {
+      try {
+        const t = (await googleRequest(w)).trim();
+        if (t) result.set(w, t);
+      } catch { /* skip failed word */ }
+    }
+    return result;
   }
 
   function translateLingva(words) {
@@ -698,6 +723,7 @@
       if (!matches) continue;
 
       for (const w of matches) {
+        if (isAcronymOrProper(w)) continue;
         const n = w.toLowerCase();
         if (n.length < CONFIG.MIN_WORD_LENGTH || n.length > CONFIG.MAX_WORD_LENGTH) continue;
         if (!cache[n]) words.add(n);
@@ -730,6 +756,7 @@
 
     let hasAnyTranslation = false;
     for (let i = 1; i < segments.length; i += 2) {
+      if (isAcronymOrProper(segments[i])) continue;
       const n = segments[i].toLowerCase();
       if (cache[n] && !shouldSkipWord(n)) { hasAnyTranslation = true; break; }
     }
@@ -744,6 +771,10 @@
       if (i % 2 === 0) {
         fragment.appendChild(document.createTextNode(seg));
       } else {
+        if (isAcronymOrProper(seg)) {
+          fragment.appendChild(document.createTextNode(seg));
+          continue;
+        }
         const n = seg.toLowerCase();
         const ko = cache[n];
         if (ko && ko !== n && ko !== seg && !shouldSkipWord(n)) {
