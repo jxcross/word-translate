@@ -37,6 +37,7 @@
     RT_BG_KEY: 'tm_gloss_rt_bg',
     RT_BG_DEFAULT: '#00000000',
     LEVEL_KEY: 'tm_gloss_level',
+    POS_KEY: 'tm_gloss_pos',
   };
 
   // ── Word Frequency Tiers ──
@@ -192,6 +193,72 @@
     { id: 'expert',    label: '전문가', desc: '희귀 단어만', skipTiers: [TIER1, TIER2, TIER3] },
   ];
 
+  // ── POS (Part of Speech) Data ──
+
+  const NOUN_DICT = new Set(('time year people way day man woman child world life hand part place case week ' +
+    'company system program question government number night point home water room mother area money story ' +
+    'fact month lot study book eye job word business issue side kind head house service friend father power ' +
+    'hour game line end member law car city community name president team minute idea body information back ' +
+    'parent face level office door health person art war history party result morning reason research girl ' +
+    'guy moment air teacher force education food son field music plan paper market table class heart center ' +
+    'street figure model road role letter film form student land river fish picture product fire animal ' +
+    'island project bank sign stage position state college boy girl brother sister wife husband daughter ' +
+    'kitchen window street garden summer winter spring church doctor nurse baby dog cat bird tree stone ' +
+    'bridge mountain ocean lake forest desert sky sun moon star cloud rain snow wind flower grass seed fruit ' +
+    'wood metal glass stone wall floor roof bed chair corner shop store farm town village street path hill ' +
+    'valley season weather degree angle circle shape color sound voice noise music song poem story movie ' +
+    'screen phone camera computer keyboard mouse button page file folder message email photo video image text ' +
+    'data code software website blog post comment link user account password address network server database ' +
+    'cloud platform device tool machine engine battery wheel frame screen board card box bag cup bottle glass ' +
+    'plate bowl knife fork spoon dish meal breakfast lunch dinner restaurant kitchen recipe diet sugar salt ' +
+    'oil butter bread rice milk cheese meat chicken beef pork fish egg cream sauce soup salad cake pie coffee ' +
+    'tea juice beer wine bottle cap hat shirt dress coat jacket pants shoe boot ring watch clock key lock ' +
+    'door gate fence wall tower flag map ticket price cost budget profit loss debt loan tax fee bill receipt ' +
+    'contract agreement policy rule standard method approach strategy goal target audience client customer ' +
+    'partner employee manager director leader chief expert agent victim witness crowd audience generation ' +
+    'version structure feature aspect element factor component layer section segment module unit block chunk ' +
+    'pattern trend cycle phase stage step process task activity event session episode chapter scene act').split(' '));
+
+  const VERB_DICT = new Set(('be have do say go get make know think take see come want look use find give tell ' +
+    'work call try ask need feel become leave put mean keep let begin seem help show hear play run move live ' +
+    'believe bring happen write provide sit stand lose pay meet include continue set learn change lead ' +
+    'understand watch follow stop create speak read allow add spend grow open walk win offer remember love ' +
+    'consider appear buy wait serve die send expect build stay fall cut reach kill remain suggest raise pass ' +
+    'sell require report decide pull develop hold carry break agree support miss pick wear choose receive ' +
+    'determine produce seek draw fight throw manage fill deal wish drop push apply improve enjoy drive teach ' +
+    'accept hang recognize join close form ring describe prepare protect prove catch handle treat avoid ' +
+    'imagine prevent express reduce establish face claim identify lay cry share involve cover achieve attack ' +
+    'fix grab belong deliver stick explain mention exist define bear replace sleep finish appreciate promise ' +
+    'refuse collect relieve depend lift remove reveal represent argue contain assume reflect hope wonder ' +
+    'indicate relate connect contribute announce maintain emerge divide warn adopt compete expand perform ' +
+    'respond confirm operate invest press display generate complete adjust approve publish conduct demand ' +
+    'enable negotiate obtain survive engage observe encourage strengthen participate organize preserve restore ' +
+    'qualify eliminate communicate celebrate estimate consult possess convince commit transform select compare ' +
+    'launch register complain assess extend acquire absorb remind restrict gather combine separate calculate ' +
+    'distribute recruit sponsor investigate evaluate analyze inspect enforce measure monitor resign rescue ' +
+    'assemble accumulate allocate adapt abandon accomplish enforce inherit prohibit stimulate motivate donate ' +
+    'illustrate guarantee withdraw drag breathe dare satisfy fold bend shake twist stretch spread pour stir ' +
+    'mix bake roast boil freeze melt burn glow shine flash spin float sink dive climb crawl slide slip trip ' +
+    'rush hurry chase grab tap knock ring whisper shout scream sing hum chew swallow sip bite lick smell ' +
+    'taste touch rub scratch dig plant harvest sew weave paint carve mold shape trim polish wrap pack load ' +
+    'store stack arrange sort label mark stamp print scan copy paste delete edit save upload download install ' +
+    'update upgrade reset restart launch deploy configure assign delegate schedule cancel postpone approve ' +
+    'reject deny grant revoke suspend resume terminate conclude').split(' '));
+
+  const POS_FILTERS = [
+    { id: 'all',  label: 'ALL' },
+    { id: 'noun', label: '명사' },
+    { id: 'verb', label: '동사' },
+  ];
+
+  function classifyPOS(word) {
+    if (NOUN_DICT.has(word)) return 'noun';
+    if (VERB_DICT.has(word)) return 'verb';
+    if (/(?:tion|sion|ment|ness|ity|ance|ence|ism|ist|ship|dom|hood|logy|graphy)$/.test(word)) return 'noun';
+    if (/(?:ize|ise|ify|ate)$/.test(word)) return 'verb';
+    return 'other';
+  }
+
   const API = { GOOGLE: 'google', LINGVA: 'lingva', LIBRE: 'libre' };
 
   let cache = loadCache();
@@ -201,11 +268,16 @@
   let rtColor = localStorage.getItem(CONFIG.RT_COLOR_KEY) || CONFIG.RT_COLOR_DEFAULT;
   let rtBg = localStorage.getItem(CONFIG.RT_BG_KEY) || CONFIG.RT_BG_DEFAULT;
   let currentLevel = parseInt(localStorage.getItem(CONFIG.LEVEL_KEY)) || 0;
+  let currentPOS = parseInt(localStorage.getItem(CONFIG.POS_KEY)) || 0;
 
   function shouldSkipWord(word) {
     const tiers = LEVELS[currentLevel].skipTiers;
     for (const tier of tiers) {
       if (tier.has(word)) return true;
+    }
+    if (currentPOS > 0) {
+      const posId = POS_FILTERS[currentPOS].id;
+      if (classifyPOS(word) !== posId) return true;
     }
     return false;
   }
@@ -394,7 +466,24 @@
       applyRtBg();
     });
 
-    panel.append(btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput);
+    // Divider 3
+    const divider3 = document.createElement('div');
+    divider3.className = 'kr-divider';
+
+    // POS filter button
+    const posBtn = document.createElement('button');
+    posBtn.className = 'kr-level-btn';
+    posBtn.title = '품사 필터 (클릭하여 순환: ALL → 명사 → 동사)';
+    posBtn.textContent = POS_FILTERS[currentPOS].label;
+
+    posBtn.addEventListener('click', () => {
+      currentPOS = (currentPOS + 1) % POS_FILTERS.length;
+      localStorage.setItem(CONFIG.POS_KEY, currentPOS);
+      posBtn.textContent = POS_FILTERS[currentPOS].label;
+      reprocessPage();
+    });
+
+    panel.append(btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, divider3, posBtn);
     document.body.appendChild(panel);
   }
 
