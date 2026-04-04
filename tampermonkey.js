@@ -28,14 +28,16 @@
     ]),
     PROCESSED_ATTR: 'data-kr-gloss',
     RT_SIZE_KEY: 'tm_gloss_rt_size',
-    RT_SIZE_DEFAULT: 0.5,
-    RT_SIZE_MIN: 0.3,
-    RT_SIZE_MAX: 0.9,
-    RT_SIZE_STEP: 0.05,
+    RT_SIZE_DEFAULT: 8,
+    RT_SIZE_MIN: 4,
+    RT_SIZE_MAX: 20,
+    RT_SIZE_STEP: 1,
     RT_COLOR_KEY: 'tm_gloss_rt_color',
     RT_COLOR_DEFAULT: '#999999',
     RT_BG_KEY: 'tm_gloss_rt_bg',
-    RT_BG_DEFAULT: '#00000000',
+    RT_BG_DEFAULT: 'transparent',
+    RT_BG_OPACITY_KEY: 'tm_gloss_rt_bg_opacity',
+    RT_BG_OPACITY_DEFAULT: 100,
     LEVEL_KEY: 'tm_gloss_level',
     POS_KEY: 'tm_gloss_pos',
   };
@@ -264,9 +266,10 @@
   let cache = loadCache();
   let activeAPI = null;
   let saveCacheTimer = null;
-  let rtSize = parseFloat(localStorage.getItem(CONFIG.RT_SIZE_KEY)) || CONFIG.RT_SIZE_DEFAULT;
+  let rtSize = parseInt(localStorage.getItem(CONFIG.RT_SIZE_KEY)) || CONFIG.RT_SIZE_DEFAULT;
   let rtColor = localStorage.getItem(CONFIG.RT_COLOR_KEY) || CONFIG.RT_COLOR_DEFAULT;
   let rtBg = localStorage.getItem(CONFIG.RT_BG_KEY) || CONFIG.RT_BG_DEFAULT;
+  let rtBgOpacity = parseInt(localStorage.getItem(CONFIG.RT_BG_OPACITY_KEY)) ?? CONFIG.RT_BG_OPACITY_DEFAULT;
   let currentLevel = parseInt(localStorage.getItem(CONFIG.LEVEL_KEY)) || 0;
   let currentPOS = parseInt(localStorage.getItem(CONFIG.POS_KEY)) || 0;
 
@@ -283,7 +286,7 @@
   }
 
   function applyRtSize() {
-    document.documentElement.style.setProperty('--kr-gloss-rt-size', rtSize + 'em');
+    document.documentElement.style.setProperty('--kr-gloss-rt-size', rtSize + 'px');
     localStorage.setItem(CONFIG.RT_SIZE_KEY, rtSize);
   }
 
@@ -292,16 +295,25 @@
     localStorage.setItem(CONFIG.RT_COLOR_KEY, rtColor);
   }
 
+  function hexToRgba(hex, opacity) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + (opacity / 100) + ')';
+  }
+
   function applyRtBg() {
-    document.documentElement.style.setProperty('--kr-gloss-rt-bg', rtBg);
+    const val = (rtBg === 'transparent' || !rtBg) ? 'transparent' : hexToRgba(rtBg, rtBgOpacity);
+    document.documentElement.style.setProperty('--kr-gloss-rt-bg', val);
     localStorage.setItem(CONFIG.RT_BG_KEY, rtBg);
+    localStorage.setItem(CONFIG.RT_BG_OPACITY_KEY, rtBgOpacity);
   }
 
   GM_addStyle(`
     :root {
-      --kr-gloss-rt-size: ${rtSize}em;
+      --kr-gloss-rt-size: ${rtSize}px;
       --kr-gloss-rt-color: ${rtColor};
-      --kr-gloss-rt-bg: ${rtBg};
+      --kr-gloss-rt-bg: ${rtBg === 'transparent' ? 'transparent' : 'rgba(' + parseInt(rtBg.slice(1,3),16) + ',' + parseInt(rtBg.slice(3,5),16) + ',' + parseInt(rtBg.slice(5,7),16) + ',' + (rtBgOpacity/100) + ')'};
     }
     ruby { ruby-align: center; }
     .kr-gloss-block { line-height: 2.2 !important; }
@@ -398,10 +410,10 @@
     const panel = document.createElement('div');
     panel.id = 'kr-gloss-panel';
 
-    // Font size controls
+    // Font size controls (px)
     const sizeLabel = document.createElement('span');
     sizeLabel.className = 'kr-size-label';
-    sizeLabel.textContent = Math.round(rtSize * 100) + '%';
+    sizeLabel.textContent = rtSize + 'px';
 
     const btnMinus = document.createElement('button');
     btnMinus.textContent = '−';
@@ -412,9 +424,9 @@
     btnPlus.title = '번역 글씨 확대';
 
     function updateSize(delta) {
-      rtSize = Math.round(Math.min(CONFIG.RT_SIZE_MAX, Math.max(CONFIG.RT_SIZE_MIN, rtSize + delta)) * 100) / 100;
+      rtSize = Math.min(CONFIG.RT_SIZE_MAX, Math.max(CONFIG.RT_SIZE_MIN, rtSize + delta));
       applyRtSize();
-      sizeLabel.textContent = Math.round(rtSize * 100) + '%';
+      sizeLabel.textContent = rtSize + 'px';
     }
 
     btnMinus.addEventListener('click', () => updateSize(-CONFIG.RT_SIZE_STEP));
@@ -456,7 +468,7 @@
       applyRtColor();
     });
 
-    // Background color picker
+    // Background color picker + opacity
     const bgLabel = document.createElement('span');
     bgLabel.className = 'kr-color-label';
     bgLabel.textContent = '배경';
@@ -464,10 +476,28 @@
     const bgInput = document.createElement('input');
     bgInput.type = 'color';
     bgInput.className = 'kr-color-input';
-    bgInput.value = rtBg.length === 9 ? rtBg.slice(0, 7) : rtBg;
+    bgInput.value = (rtBg && rtBg !== 'transparent') ? rtBg : '#ffff00';
     bgInput.title = '번역 배경 색상';
     bgInput.addEventListener('input', (e) => {
       rtBg = e.target.value;
+      applyRtBg();
+    });
+
+    const opacitySlider = document.createElement('input');
+    opacitySlider.type = 'range';
+    opacitySlider.min = '0';
+    opacitySlider.max = '100';
+    opacitySlider.value = rtBgOpacity;
+    opacitySlider.title = '배경 투명도 (' + rtBgOpacity + '%)';
+    opacitySlider.style.cssText = 'width: 50px; height: 14px; cursor: pointer; accent-color: #888;';
+    opacitySlider.addEventListener('input', (e) => {
+      rtBgOpacity = parseInt(e.target.value);
+      opacitySlider.title = '배경 투명도 (' + rtBgOpacity + '%)';
+      if (rtBgOpacity === 0) {
+        rtBg = 'transparent';
+      } else if (rtBg === 'transparent') {
+        rtBg = bgInput.value;
+      }
       applyRtBg();
     });
 
@@ -488,7 +518,7 @@
       reprocessPage();
     });
 
-    panel.append(btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, divider3, posBtn);
+    panel.append(btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, opacitySlider, divider3, posBtn);
     document.body.appendChild(panel);
   }
 
