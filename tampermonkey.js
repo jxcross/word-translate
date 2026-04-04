@@ -532,8 +532,55 @@
       reprocessPage();
     });
 
-    panel.append(btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, opacitySlider, divider3, posBtn);
+    // Drag handle
+    const dragHandle = document.createElement('span');
+    dragHandle.textContent = '⠿';
+    dragHandle.style.cssText = 'cursor: grab; font-size: 14px; opacity: 0.5; user-select: none;';
+    dragHandle.title = '드래그하여 이동';
+
+    panel.append(dragHandle, btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, opacitySlider, divider3, posBtn);
     document.body.appendChild(panel);
+
+    // Drag logic
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    dragHandle.addEventListener('mousedown', (e) => {
+      dragging = true;
+      offsetX = e.clientX - panel.getBoundingClientRect().left;
+      offsetY = e.clientY - panel.getBoundingClientRect().top;
+      dragHandle.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const x = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, e.clientX - offsetX));
+      const y = Math.max(0, Math.min(window.innerHeight - panel.offsetHeight, e.clientY - offsetY));
+      panel.style.left = x + 'px';
+      panel.style.top = y + 'px';
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      dragHandle.style.cursor = 'grab';
+      localStorage.setItem('tm_gloss_panel_pos', panel.style.left + ',' + panel.style.top);
+    });
+
+    // Restore saved position
+    const savedPos = localStorage.getItem('tm_gloss_panel_pos');
+    if (savedPos) {
+      const [left, top] = savedPos.split(',');
+      panel.style.left = left;
+      panel.style.top = top;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+    }
   }
 
   function reprocessPage() {
