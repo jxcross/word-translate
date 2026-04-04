@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  libretranslate:
+    image: libretranslate/libretranslate
+    container_name: libretranslate
+    ports:
+      - "5555:5000"
+    environment:
+      LT_LOAD_ONLY: "en,ko"
+      LT_UPDATE_MODELS: "true"
+    volumes:
+      - libretranslate_models:/home/libretranslate/.local:rw
+    restart: unless-stopped
+
+volumes:
+  libretranslate_models:
