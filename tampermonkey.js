@@ -867,6 +867,7 @@
 
   async function run() {
     console.log('[KR-Gloss] Starting v2.1');
+    createPanel();
 
     await detectAPI();
     if (!activeAPI) {
@@ -885,7 +886,6 @@
 
     applyTranslations();
     observeDOM();
-    createPanel();
 
     console.log('[KR-Gloss] Ready');
   }
