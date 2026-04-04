@@ -322,9 +322,9 @@
       line-height: 1.4 !important;
     }
     rt {
-      font-size: var(--kr-gloss-rt-size);
-      color: var(--kr-gloss-rt-color);
-      background: var(--kr-gloss-rt-bg);
+      font-size: var(--kr-gloss-rt-size) !important;
+      color: var(--kr-gloss-rt-color) !important;
+      background: var(--kr-gloss-rt-bg) !important;
       border-radius: 2px;
       font-weight: normal;
       user-select: none;
