@@ -594,8 +594,8 @@
 
   // ── Word Filters ──
 
-  function isAcronymOrProper(word) {
-    return /^[A-Z]{2,}s?$/.test(word) || /^[A-Z][a-z]+$/.test(word);
+  function isAcronym(word) {
+    return /^[A-Z]{2,}s?$/.test(word);
   }
 
   // ── Translation APIs ──
@@ -767,7 +767,7 @@
       if (!matches) continue;
 
       for (const w of matches) {
-        if (isAcronymOrProper(w)) continue;
+        if (isAcronym(w)) continue;
         const n = w.toLowerCase();
         if (n.length < CONFIG.MIN_WORD_LENGTH || n.length > CONFIG.MAX_WORD_LENGTH) continue;
         if (!cache[n]) words.add(n);
@@ -800,7 +800,7 @@
 
     let hasAnyTranslation = false;
     for (let i = 1; i < segments.length; i += 2) {
-      if (isAcronymOrProper(segments[i])) continue;
+      if (isAcronym(segments[i])) continue;
       const n = segments[i].toLowerCase();
       if (cache[n] && !shouldSkipWord(n)) { hasAnyTranslation = true; break; }
     }
@@ -815,7 +815,7 @@
       if (i % 2 === 0) {
         fragment.appendChild(document.createTextNode(seg));
       } else {
-        if (isAcronymOrProper(seg)) {
+        if (isAcronym(seg)) {
           fragment.appendChild(document.createTextNode(seg));
           continue;
         }
