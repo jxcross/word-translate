@@ -40,6 +40,13 @@
     RT_BG_OPACITY_DEFAULT: 100,
     LEVEL_KEY: 'tm_gloss_level',
     POS_KEY: 'tm_gloss_pos',
+    HOVER_KEY: 'tm_gloss_hover',
+    ENABLED_KEY: 'tm_gloss_enabled',
+    KNOWN_KEY: 'tm_gloss_known',
+    VOCAB_KEY: 'tm_gloss_vocab',
+    SEEN_KEY: 'tm_gloss_seen',
+    SEEN_THRESHOLD_KEY: 'tm_gloss_seen_threshold',
+    SEEN_THRESHOLD_DEFAULT: 0,
   };
 
   // ── Word Frequency Tiers ──
@@ -272,8 +279,16 @@
   let rtBgOpacity = parseInt(localStorage.getItem(CONFIG.RT_BG_OPACITY_KEY)) ?? CONFIG.RT_BG_OPACITY_DEFAULT;
   let currentLevel = parseInt(localStorage.getItem(CONFIG.LEVEL_KEY)) || 0;
   let currentPOS = parseInt(localStorage.getItem(CONFIG.POS_KEY)) || 0;
+  let hoverMode = localStorage.getItem(CONFIG.HOVER_KEY) === 'true';
+  let glossEnabled = localStorage.getItem(CONFIG.ENABLED_KEY) !== 'false';
+  let knownWords = new Set(JSON.parse(localStorage.getItem(CONFIG.KNOWN_KEY) || '[]'));
+  let vocabList = JSON.parse(localStorage.getItem(CONFIG.VOCAB_KEY) || '[]');
+  let seenCount = JSON.parse(localStorage.getItem(CONFIG.SEEN_KEY) || '{}');
+  let seenThreshold = parseInt(localStorage.getItem(CONFIG.SEEN_THRESHOLD_KEY)) || CONFIG.SEEN_THRESHOLD_DEFAULT;
 
   function shouldSkipWord(word) {
+    if (knownWords.has(word)) return true;
+    if (seenThreshold > 0 && (seenCount[word] || 0) >= seenThreshold) return true;
     const tiers = LEVELS[currentLevel].skipTiers;
     for (const tier of tiers) {
       if (tier.has(word)) return true;
@@ -284,6 +299,10 @@
     }
     return false;
   }
+
+  function saveKnown() { localStorage.setItem(CONFIG.KNOWN_KEY, JSON.stringify([...knownWords])); }
+  function saveVocab() { localStorage.setItem(CONFIG.VOCAB_KEY, JSON.stringify(vocabList)); }
+  function saveSeen() { localStorage.setItem(CONFIG.SEEN_KEY, JSON.stringify(seenCount)); }
 
   function applyRtSize() {
     document.documentElement.style.setProperty('--kr-gloss-rt-size', rtSize + 'px');
@@ -340,6 +359,36 @@
     }
     span[data-kr-gloss] {
       display: contents;
+    }
+    body.kr-gloss-hover rt {
+      opacity: 0 !important;
+      transition: opacity 0.15s;
+    }
+    body.kr-gloss-hover ruby:hover rt {
+      opacity: 1 !important;
+    }
+    body.kr-gloss-off rt {
+      display: none !important;
+    }
+    ruby { cursor: pointer; }
+    #kr-gloss-ctx {
+      position: fixed;
+      z-index: 9999999;
+      background: #222;
+      color: #fff;
+      border-radius: 6px;
+      padding: 4px 0;
+      font: 12px/1.6 sans-serif;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+      display: none;
+    }
+    #kr-gloss-ctx div {
+      padding: 4px 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #kr-gloss-ctx div:hover {
+      background: #444;
     }
     #kr-gloss-panel {
       position: fixed;
@@ -532,14 +581,144 @@
       reprocessPage();
     });
 
+    // Divider 4
+    const divider4 = document.createElement('div');
+    divider4.className = 'kr-divider';
+
+    // Hover mode toggle
+    const hoverBtn = document.createElement('button');
+    hoverBtn.className = 'kr-level-btn';
+    hoverBtn.textContent = hoverMode ? '호버' : '항상';
+    hoverBtn.title = '호버: 마우스 올릴 때만 번역 표시 (Alt+H)';
+    if (hoverMode) document.body.classList.add('kr-gloss-hover');
+    hoverBtn.addEventListener('click', toggleHover);
+
+    function toggleHover() {
+      hoverMode = !hoverMode;
+      localStorage.setItem(CONFIG.HOVER_KEY, hoverMode);
+      hoverBtn.textContent = hoverMode ? '호버' : '항상';
+      document.body.classList.toggle('kr-gloss-hover', hoverMode);
+    }
+
+    // ON/OFF toggle
+    const onoffBtn = document.createElement('button');
+    onoffBtn.className = 'kr-level-btn';
+    onoffBtn.textContent = glossEnabled ? 'ON' : 'OFF';
+    onoffBtn.title = '번역 ON/OFF (Alt+G)';
+    if (!glossEnabled) document.body.classList.add('kr-gloss-off');
+    onoffBtn.addEventListener('click', toggleGloss);
+
+    function toggleGloss() {
+      glossEnabled = !glossEnabled;
+      localStorage.setItem(CONFIG.ENABLED_KEY, glossEnabled);
+      onoffBtn.textContent = glossEnabled ? 'ON' : 'OFF';
+      document.body.classList.toggle('kr-gloss-off', !glossEnabled);
+    }
+
+    // Divider 5
+    const divider5 = document.createElement('div');
+    divider5.className = 'kr-divider';
+
+    // Export vocab button
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'kr-level-btn';
+    exportBtn.textContent = '내보내기';
+    exportBtn.title = '단어장 CSV 내보내기';
+    exportBtn.addEventListener('click', exportVocab);
+
+    // Help button
+    const helpBtn = document.createElement('button');
+    helpBtn.className = 'kr-level-btn';
+    helpBtn.textContent = '?';
+    helpBtn.title = 'Alt+G: ON/OFF\nAlt+H: 호버 토글\nAlt+K: 패널 숨김\n클릭: 발음 듣기\n우클릭: 단어장/아는단어';
+
     // Drag handle
     const dragHandle = document.createElement('span');
     dragHandle.textContent = '⠿';
     dragHandle.style.cssText = 'cursor: grab; font-size: 14px; opacity: 0.5; user-select: none;';
     dragHandle.title = '드래그하여 이동';
 
-    panel.append(dragHandle, btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, opacitySlider, divider3, posBtn);
+    panel.append(dragHandle, btnMinus, sizeLabel, btnPlus, divider, levelBtn, divider2, colorLabel, colorInput, bgLabel, bgInput, opacitySlider, divider3, posBtn, divider4, hoverBtn, onoffBtn, divider5, exportBtn, helpBtn);
     document.body.appendChild(panel);
+
+    // ── Keyboard shortcuts ──
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.altKey && e.key === 'g') { toggleGloss(); e.preventDefault(); }
+      if (e.altKey && e.key === 'h') { toggleHover(); e.preventDefault(); }
+      if (e.altKey && e.key === 'k') { panel.style.display = panel.style.display === 'none' ? 'flex' : 'none'; e.preventDefault(); }
+    });
+
+    // ── TTS: click ruby to hear pronunciation ──
+    document.addEventListener('click', (e) => {
+      const ruby = e.target.closest('ruby[data-word]');
+      if (!ruby) return;
+      const word = ruby.getAttribute('data-word');
+      if (!word) return;
+      speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(word);
+      utter.lang = 'en-US';
+      utter.rate = 0.9;
+      speechSynthesis.speak(utter);
+      ruby.style.outline = '2px solid #4fc3f7';
+      setTimeout(() => { ruby.style.outline = ''; }, 600);
+    });
+
+    // ── Context menu: right-click ruby ──
+    const ctx = document.createElement('div');
+    ctx.id = 'kr-gloss-ctx';
+    const ctxKnown = document.createElement('div');
+    ctxKnown.textContent = '아는 단어로 표시';
+    const ctxVocab = document.createElement('div');
+    ctxVocab.textContent = '단어장에 추가';
+    ctx.append(ctxKnown, ctxVocab);
+    document.body.appendChild(ctx);
+    let ctxWord = '';
+
+    document.addEventListener('contextmenu', (e) => {
+      const ruby = e.target.closest('ruby[data-word]');
+      if (!ruby) { ctx.style.display = 'none'; return; }
+      e.preventDefault();
+      ctxWord = ruby.getAttribute('data-word');
+      ctx.style.left = e.clientX + 'px';
+      ctx.style.top = e.clientY + 'px';
+      ctx.style.display = 'block';
+    });
+
+    document.addEventListener('click', () => { ctx.style.display = 'none'; });
+
+    ctxKnown.addEventListener('click', () => {
+      if (!ctxWord) return;
+      knownWords.add(ctxWord);
+      saveKnown();
+      ctx.style.display = 'none';
+      reprocessPage();
+    });
+
+    ctxVocab.addEventListener('click', () => {
+      if (!ctxWord) return;
+      const ko = cache[ctxWord] || '';
+      if (!vocabList.find(v => v.word === ctxWord)) {
+        vocabList.push({ word: ctxWord, translation: ko, url: location.href, date: new Date().toISOString().slice(0, 10) });
+        saveVocab();
+      }
+      ctx.style.display = 'none';
+      ruby.style.outline = '2px solid #66bb6a';
+      setTimeout(() => { ruby.style.outline = ''; }, 600);
+    });
+
+    function exportVocab() {
+      if (vocabList.length === 0) { alert('단어장이 비어있습니다.'); return; }
+      let csv = 'word,translation,url,date\n';
+      for (const v of vocabList) {
+        csv += '"' + v.word + '","' + v.translation + '","' + v.url + '","' + v.date + '"\n';
+      }
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'vocabulary_' + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+    }
 
     // Drag logic
     let dragging = false;
@@ -869,7 +1048,9 @@
         const n = seg.toLowerCase();
         const ko = cache[n];
         if (ko && ko !== n && ko !== seg && !shouldSkipWord(n)) {
+          seenCount[n] = (seenCount[n] || 0) + 1;
           const ruby = document.createElement('ruby');
+          ruby.setAttribute('data-word', n);
           ruby.appendChild(document.createTextNode(seg));
           const rt = document.createElement('rt');
           rt.textContent = ko;
@@ -914,6 +1095,9 @@
       const block = el.closest('p, li, td, th, dd, dt, blockquote, article, section, figcaption, h1, h2, h3, h4, h5, h6');
       if (block) block.classList.add('kr-gloss-block');
     });
+
+    // Save seen counts
+    saveSeen();
   }
 
   // ── MutationObserver ──
